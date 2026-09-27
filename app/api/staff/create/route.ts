@@ -1,31 +1,33 @@
 import { NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 export async function POST(request: Request) {
   try {
-    // =====================================
-    // 現在ログインしている管理者を取得
-    // =====================================
-
+    // =========================
+    // 通常クライアント
+    // ログイン中ユーザー確認用
+    // =========================
     const supabase = await createClient()
 
     const {
       data: { user },
-      error: userError,
     } = await supabase.auth.getUser()
 
-    if (userError || !user) {
+    if (!user) {
       return NextResponse.json(
-        { error: 'ログインが必要です' },
-        { status: 401 }
+        {
+          error: 'ログインが必要です',
+        },
+        {
+          status: 401,
+        }
       )
     }
 
-    // =====================================
-    // フォームデータ取得
-    // =====================================
-
+    // =========================
+    // リクエスト取得
+    // =========================
     const body = await request.json()
 
     const {
@@ -36,179 +38,224 @@ export async function POST(request: Request) {
       role,
     } = body
 
+    // =========================
+    // 入力チェック
+    // =========================
     if (
       !storeId ||
       !name ||
       !email ||
       !password ||
-      !role
+      !['staff', 'admin'].includes(role)
     ) {
       return NextResponse.json(
-        { error: '入力内容が不足しています' },
-        { status: 400 }
-      )
-    }
-
-    if (!['staff', 'admin'].includes(role)) {
-      return NextResponse.json(
-        { error: '権限が正しくありません' },
-        { status: 400 }
+        {
+          error: '入力内容が正しくありません',
+        },
+        {
+          status: 400,
+        }
       )
     }
 
     if (password.length < 6) {
       return NextResponse.json(
-        { error: 'パスワードは6文字以上にしてください' },
-        { status: 400 }
+        {
+          error: 'パスワードは6文字以上で設定してください',
+        },
+        {
+          status: 400,
+        }
       )
     }
 
-    // =====================================
-    // 現在のユーザーの権限確認
-    // =====================================
-
-    const { data: profile } = await supabase
+    // =========================
+    // 操作者プロフィール
+    // =========================
+    const {
+      data: myProfile,
+      error: profileError,
+    } = await supabase
       .from('profiles')
-      .select('system_role')
+      .select('id, system_role')
       .eq('id', user.id)
       .single()
 
-    const isSuperAdmin =
-      profile?.system_role === 'super_admin'
+    if (profileError || !myProfile) {
+      return NextResponse.json(
+        {
+          error: 'プロフィール情報を確認できません',
+        },
+        {
+          status: 403,
+        }
+      )
+    }
 
+    const isSuperAdmin =
+      myProfile.system_role === 'super_admin'
+
+    // =========================
+    // 店舗管理者確認
+    // =========================
     let isStoreAdmin = false
 
     if (!isSuperAdmin) {
-      const { data: membership } = await supabase
+      const {
+        data: membership,
+        error: membershipError,
+      } = await supabase
         .from('store_memberships')
-        .select('id')
-        .eq('user_id', user.id)
+        .select('role, active')
         .eq('store_id', storeId)
-        .eq('role', 'admin')
+        .eq('user_id', user.id)
         .eq('active', true)
         .maybeSingle()
 
-      isStoreAdmin = !!membership
+      if (membershipError) {
+        return NextResponse.json(
+          {
+            error: '権限の確認に失敗しました',
+          },
+          {
+            status: 500,
+          }
+        )
+      }
+
+      isStoreAdmin =
+        membership?.role === 'admin'
     }
 
     if (!isSuperAdmin && !isStoreAdmin) {
       return NextResponse.json(
-        { error: 'スタッフを登録する権限がありません' },
-        { status: 403 }
+        {
+          error: 'スタッフを追加する権限がありません',
+        },
+        {
+          status: 403,
+        }
       )
     }
 
-    // =====================================
-    // Service Roleクライアント
-    // =====================================
+    // =========================
+    // 管理用Supabase
+    // =========================
+    const adminSupabase =
+      createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        }
+      )
 
-    const adminSupabase = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
-
-    // =====================================
+    // =========================
     // Authユーザー作成
-    // =====================================
-
+    // =========================
     const {
       data: authData,
       error: authError,
-    } = await adminSupabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    })
+    } =
+      await adminSupabase.auth.admin.createUser({
+        email: email.trim().toLowerCase(),
+        password,
+        email_confirm: true,
+      })
 
     if (authError || !authData.user) {
       return NextResponse.json(
         {
           error:
-            authError?.message ||
-            'ログインアカウントの作成に失敗しました',
+            'アカウント作成に失敗しました: ' +
+            (authError?.message ?? ''),
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       )
     }
 
-    const newUserId = authData.user.id
+    const newUserId =
+      authData.user.id
 
-    // =====================================
-    // profiles登録
-    // =====================================
-
-    const { error: profileError } = await adminSupabase
+    // =========================
+    // profile作成
+    // =========================
+    const {
+      error: newProfileError,
+    } = await adminSupabase
       .from('profiles')
       .insert({
         id: newUserId,
-        name,
+        name: name.trim(),
         system_role: 'user',
         active: true,
       })
 
-    if (profileError) {
-      // Authだけ残らないよう削除
-      await adminSupabase.auth.admin.deleteUser(newUserId)
+    if (newProfileError) {
+      await adminSupabase.auth.admin.deleteUser(
+        newUserId
+      )
 
       return NextResponse.json(
         {
           error:
             'プロフィール作成に失敗しました: ' +
-            profileError.message,
+            newProfileError.message,
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       )
     }
 
-    // =====================================
-    // 店舗所属登録
-    // =====================================
+    // =========================
+    // 店舗所属作成
+    // =========================
+    const {
+      error: membershipInsertError,
+    } = await adminSupabase
+      .from('store_memberships')
+      .insert({
+        user_id: newUserId,
+        store_id: storeId,
+        role,
+        active: true,
+      })
 
-    const { error: membershipError } =
-      await adminSupabase
-        .from('store_memberships')
-        .insert({
-          user_id: newUserId,
-          store_id: storeId,
-          role,
-          active: true,
-        })
-
-    if (membershipError) {
-      // profiles削除
+    if (membershipInsertError) {
       await adminSupabase
         .from('profiles')
         .delete()
         .eq('id', newUserId)
 
-      // Auth削除
-      await adminSupabase.auth.admin.deleteUser(newUserId)
+      await adminSupabase.auth.admin.deleteUser(
+        newUserId
+      )
 
       return NextResponse.json(
         {
           error:
             '店舗登録に失敗しました: ' +
-            membershipError.message,
+            membershipInsertError.message,
         },
-        { status: 500 }
+        {
+          status: 500,
+        }
       )
     }
 
-    // =====================================
+    // =========================
     // 成功
-    // =====================================
-
+    // =========================
     return NextResponse.json({
       success: true,
       userId: newUserId,
     })
-
   } catch (error) {
     console.error(error)
 
@@ -216,7 +263,9 @@ export async function POST(request: Request) {
       {
         error: '予期しないエラーが発生しました',
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     )
   }
 }

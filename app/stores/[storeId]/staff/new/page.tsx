@@ -1,253 +1,227 @@
+'use client'
+
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { useParams, useRouter } from 'next/navigation'
+import { FormEvent, useState } from 'react'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export default function NewStaffPage() {
+  const params = useParams()
+  const router = useRouter()
 
-type Props = {
-  params: Promise<{
-    storeId: string
-  }>
-}
+  const storeId = params.storeId as string
 
-export default async function StaffPage({ params }: Props) {
-  const { storeId } = await params
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState<'staff' | 'admin'>('staff')
 
-  const supabase = await createClient()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  // =========================
-  // ログイン確認
-  // =========================
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  async function handleSubmit(
+    e: FormEvent<HTMLFormElement>
+  ) {
+    e.preventDefault()
 
-  if (!user) {
-    redirect('/login')
-  }
+    setError('')
 
-  // =========================
-  // 自分のプロフィール
-  // =========================
-  const { data: myProfile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, name, system_role, active')
-    .eq('id', user.id)
-    .single()
+    if (!name.trim()) {
+      setError('名前を入力してください')
+      return
+    }
 
-  if (profileError || !myProfile) {
-    return (
-      <main className="min-h-screen bg-gray-100 p-6">
-        <div className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow">
-          <h1 className="text-2xl font-bold">
-            プロフィール情報を取得できませんでした
-          </h1>
+    if (!email.trim()) {
+      setError('メールアドレスを入力してください')
+      return
+    }
 
-          <pre className="mt-4 whitespace-pre-wrap rounded bg-gray-100 p-4 text-sm">
-            {JSON.stringify(profileError, null, 2)}
-          </pre>
-        </div>
-      </main>
-    )
-  }
+    if (password.length < 6) {
+      setError('パスワードは6文字以上で入力してください')
+      return
+    }
 
-  // =========================
-  // 店舗取得
-  // =========================
-  const { data: store, error: storeError } = await supabase
-    .from('stores')
-    .select('id, name')
-    .eq('id', storeId)
-    .single()
+    setLoading(true)
 
-  if (storeError || !store) {
-    return (
-      <main className="min-h-screen bg-gray-100 p-6">
-        <div className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow">
-          <h1 className="text-2xl font-bold">
-            店舗が見つかりません
-          </h1>
+    try {
+      const response = await fetch(
+        '/api/staff/create',
+        {
+          method: 'POST',
 
-          <pre className="mt-4 whitespace-pre-wrap rounded bg-gray-100 p-4 text-sm">
-            {JSON.stringify(storeError, null, 2)}
-          </pre>
-        </div>
-      </main>
-    )
-  }
+          headers: {
+            'Content-Type': 'application/json',
+          },
 
-  // =========================
-  // 店舗内での自分の権限確認
-  // =========================
-  const { data: myMembership } = await supabase
-    .from('store_memberships')
-    .select('role, active')
-    .eq('store_id', storeId)
-    .eq('user_id', user.id)
-    .eq('active', true)
-    .maybeSingle()
-
-  const isSuperAdmin =
-    myProfile.system_role === 'super_admin'
-
-  const isStoreAdmin =
-    myMembership?.role === 'admin'
-
-  const canManage =
-    isSuperAdmin || isStoreAdmin
-
-  // 一般スタッフはスタッフ管理画面を見せない
-  if (!canManage) {
-    redirect(`/stores/${storeId}`)
-  }
-
-  // =========================
-  // 所属スタッフ取得
-  // =========================
-  const { data: memberships, error: membershipError } = await supabase
-    .from('store_memberships')
-    .select(`
-      id,
-      user_id,
-      role,
-      active,
-      created_at,
-      profiles (
-        id,
-        name,
-        active
+          body: JSON.stringify({
+            storeId,
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            role,
+          }),
+        }
       )
-    `)
-    .eq('store_id', storeId)
-    .order('created_at')
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(
+          result.error ||
+            'スタッフの登録に失敗しました'
+        )
+        return
+      }
+
+      alert('スタッフを追加しました')
+
+      router.replace(
+        `/stores/${storeId}/staff`
+      )
+
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+
+      setError(
+        '通信エラーが発生しました'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <main className="min-h-screen bg-gray-100 p-4 md:p-6">
-      <div className="mx-auto max-w-5xl">
+    <main className="min-h-screen bg-gray-100 p-3 md:p-6">
 
-        {/* =========================
-            ヘッダー
-        ========================= */}
-        <div className="rounded-2xl bg-white p-6 shadow">
+      <div className="mx-auto max-w-xl">
+
+        <div className="rounded-2xl bg-white p-5 shadow md:p-6">
+
           <Link
-            href={`/stores/${storeId}`}
+            href={`/stores/${storeId}/staff`}
             prefetch={false}
-            className="text-sm text-gray-500 hover:text-black"
+            className="text-sm text-gray-500"
           >
-            ← シフト管理へ戻る
+            ← スタッフ管理へ戻る
           </Link>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold">
-                スタッフ管理
-              </h1>
+          <h1 className="mt-5 text-2xl font-bold">
+            スタッフ追加
+          </h1>
 
-              <p className="mt-1 text-gray-500">
-                {store.name}
+          <p className="mt-2 text-sm text-gray-500">
+            新しいスタッフのログインアカウントを作成します。
+          </p>
+
+          <form
+            onSubmit={handleSubmit}
+            className="mt-7 space-y-5"
+          >
+
+            {/* 名前 */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                名前
+              </label>
+
+              <input
+                type="text"
+                value={name}
+                onChange={(e) =>
+                  setName(e.target.value)
+                }
+                placeholder="例：ちえ"
+                className="w-full rounded-xl border px-4 py-3 text-base outline-none focus:border-black"
+              />
+            </div>
+
+            {/* メール */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                メールアドレス
+              </label>
+
+              <input
+                type="email"
+                value={email}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
+                placeholder="example@gmail.com"
+                autoCapitalize="none"
+                autoCorrect="off"
+                className="w-full rounded-xl border px-4 py-3 text-base outline-none focus:border-black"
+              />
+            </div>
+
+            {/* パスワード */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                初期パスワード
+              </label>
+
+              <input
+                type="password"
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
+                placeholder="6文字以上"
+                className="w-full rounded-xl border px-4 py-3 text-base outline-none focus:border-black"
+              />
+
+              <p className="mt-2 text-xs text-gray-400">
+                登録後、このメールアドレスとパスワードでログインできます。
               </p>
             </div>
 
-            <Link
-              href={`/stores/${storeId}/staff/new`}
-              prefetch={false}
-              className="rounded-lg bg-black px-5 py-3 text-white hover:bg-gray-800"
-            >
-              ＋ スタッフ追加
-            </Link>
-          </div>
-        </div>
+            {/* 権限 */}
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                権限
+              </label>
 
-        {/* =========================
-            エラー表示
-        ========================= */}
-        {membershipError && (
-          <div className="mt-6 rounded-2xl bg-red-50 p-6 text-red-600">
-            スタッフ情報を取得できませんでした。
-
-            <pre className="mt-3 whitespace-pre-wrap text-xs">
-              {JSON.stringify(membershipError, null, 2)}
-            </pre>
-          </div>
-        )}
-
-        {/* =========================
-            スタッフ一覧
-        ========================= */}
-        <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow">
-          <div className="border-b p-6">
-            <h2 className="text-lg font-bold">
-              所属スタッフ
-            </h2>
-          </div>
-
-          {memberships && memberships.length > 0 ? (
-            <div className="divide-y">
-              {memberships.map((membership) => {
-                const profileRaw =
-                  membership.profiles
-
-                const profile =
-                  Array.isArray(profileRaw)
-                    ? profileRaw[0]
-                    : profileRaw
-
-                if (!profile) {
-                  return null
+              <select
+                value={role}
+                onChange={(e) =>
+                  setRole(
+                    e.target.value as
+                      | 'staff'
+                      | 'admin'
+                  )
                 }
+                className="w-full rounded-xl border px-4 py-3 text-base"
+              >
+                <option value="staff">
+                  スタッフ
+                </option>
 
-                return (
-                  <div
-                    key={membership.id}
-                    className="flex flex-wrap items-center justify-between gap-4 p-6"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {profile.name}
-                      </p>
-
-                      <div className="mt-2 flex flex-wrap gap-2 text-sm">
-
-                        <span className="rounded-full bg-gray-100 px-3 py-1">
-                          {membership.role === 'admin'
-                            ? '幹部'
-                            : 'スタッフ'}
-                        </span>
-
-                        <span
-                          className={
-                            membership.active
-                              ? 'rounded-full bg-green-50 px-3 py-1 text-green-700'
-                              : 'rounded-full bg-gray-100 px-3 py-1 text-gray-500'
-                          }
-                        >
-                          {membership.active
-                            ? '在籍'
-                            : '退店'}
-                        </span>
-
-                      </div>
-                    </div>
-
-                    <Link
-                      href={`/stores/${storeId}/staff/${membership.user_id}`}
-                      prefetch={false}
-                      className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
-                    >
-                      編集
-                    </Link>
-                  </div>
-                )
-              })}
+                <option value="admin">
+                  幹部
+                </option>
+              </select>
             </div>
-          ) : (
-            <div className="p-10 text-center text-gray-500">
-              まだスタッフが登録されていません。
-            </div>
-          )}
+
+            {/* エラー */}
+            {error && (
+              <div className="rounded-xl bg-red-50 p-4 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            {/* 登録 */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl bg-black py-4 font-medium text-white disabled:opacity-50"
+            >
+              {loading
+                ? '登録中...'
+                : 'スタッフを追加'}
+            </button>
+
+          </form>
         </div>
-
       </div>
     </main>
   )
