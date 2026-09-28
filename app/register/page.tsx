@@ -147,7 +147,7 @@ export default function RegisterPage() {
               onChange={(e) => setName(e.target.value)}
               required
               className="w-full rounded-lg border px-4 py-3"
-              placeholder="例：ちえ"
+              placeholder="例：はだ"
             />
           </div>
 
