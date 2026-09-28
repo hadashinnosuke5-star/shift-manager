@@ -130,7 +130,7 @@ export default function NewStaffPage() {
                 onChange={(e) =>
                   setName(e.target.value)
                 }
-                placeholder="例：ちえ"
+                placeholder="例：はだ"
                 className="w-full rounded-xl border px-4 py-3 text-base outline-none focus:border-black"
               />
             </div>
