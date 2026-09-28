@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 export async function POST(
   request: Request
 ) {
   try {
+    // =========================
+    // ログイン確認
+    // =========================
     const supabase =
       await createClient()
 
@@ -25,6 +29,9 @@ export async function POST(
       )
     }
 
+    // =========================
+    // リクエスト取得
+    // =========================
     const body =
       await request.json()
 
@@ -57,9 +64,9 @@ export async function POST(
     // =========================
     // 店舗所属確認
     // =========================
-
     const {
       data: membership,
+      error: membershipError,
     } =
       await supabase
         .from(
@@ -80,7 +87,10 @@ export async function POST(
         )
         .maybeSingle()
 
-    if (!membership) {
+    if (
+      membershipError ||
+      !membership
+    ) {
       return NextResponse.json(
         {
           error:
@@ -93,11 +103,11 @@ export async function POST(
     }
 
     // =========================
-    // 店舗シフト確定確認
+    // シフト受付状態確認
     // =========================
-
     const {
       data: period,
+      error: periodError,
     } =
       await supabase
         .from('shift_periods')
@@ -109,6 +119,18 @@ export async function POST(
         .eq('year', year)
         .eq('month', month)
         .maybeSingle()
+
+    if (periodError) {
+      return NextResponse.json(
+        {
+          error:
+            'シフト受付状態を確認できません',
+        },
+        {
+          status: 500,
+        }
+      )
+    }
 
     if (
       period?.status === 'locked'
@@ -125,13 +147,29 @@ export async function POST(
     }
 
     // =========================
-    // 提出
+    // 管理用Supabase
     // =========================
+    const adminSupabase =
+      createAdminClient(
+        process.env
+          .NEXT_PUBLIC_SUPABASE_URL!,
+        process.env
+          .SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        }
+      )
 
+    // =========================
+    // 提出状態を保存
+    // =========================
     const {
-      error,
+      error: submissionError,
     } =
-      await supabase
+      await adminSupabase
         .from(
           'shift_submissions'
         )
@@ -156,12 +194,16 @@ export async function POST(
           }
         )
 
-    if (error) {
+    if (submissionError) {
+      console.error(
+        submissionError
+      )
+
       return NextResponse.json(
         {
           error:
-            '提出処理に失敗しました: ' +
-            error.message,
+            '提出状態の変更に失敗しました: ' +
+            submissionError.message,
         },
         {
           status: 500,
@@ -169,6 +211,9 @@ export async function POST(
       )
     }
 
+    // =========================
+    // 成功
+    // =========================
     return NextResponse.json({
       success: true,
       status,
