@@ -448,17 +448,17 @@ export default async function StorePage({
           )}
 
           {/* スタッフ */}
-          {!canManage && (
-            <div className="mt-4">
-              <Link
-                href={`/stores/${storeId}/shift?year=${year}&month=${month}`}
-                prefetch={false}
-                className="inline-flex w-full justify-center rounded-xl bg-black px-5 py-3 text-white md:w-auto"
-              >
-                自分のシフトを入力
-              </Link>
-            </div>
-          )}
+            {myMembership && (
+              <div className="mt-4">
+                <Link
+                  href={`/stores/${storeId}/shift?year=${year}&month=${month}`}
+                  prefetch={false}
+                  className="inline-flex w-full justify-center rounded-xl bg-black px-5 py-3 text-white md:w-auto"
+                >
+                  自分のシフトを入力
+                </Link>
+              </div>
+            )}
 
         </div>
 
