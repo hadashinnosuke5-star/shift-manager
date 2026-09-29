@@ -29,11 +29,7 @@ type Props = {
   month: number
   daysInMonth: number
   initialShifts: Shift[]
-
-  // 店舗全体が確定済みか
   locked: boolean
-
-  // 本人が提出済みか
   submitted: boolean
 }
 
@@ -49,15 +45,12 @@ export default function ShiftEditForm({
 }: Props) {
   const router = useRouter()
 
-  // =====================================
-  // 提出済み or 店舗確定済みなら編集不可
-  // =====================================
   const formLocked =
     locked || submitted
 
-  // =====================================
-  // 初期データ作成
-  // =====================================
+  // =========================
+  // 初期データ
+  // =========================
   function createInitialData() {
     const data: Record<number, DayData> = {}
 
@@ -77,7 +70,6 @@ export default function ShiftEditForm({
             item.shift_date === date
         )
 
-      // データなし
       if (!shift) {
         data[day] = {
           type: 'none',
@@ -90,7 +82,6 @@ export default function ShiftEditForm({
         continue
       }
 
-      // 休み
       if (shift.is_off) {
         data[day] = {
           type: 'off',
@@ -103,7 +94,6 @@ export default function ShiftEditForm({
         continue
       }
 
-      // 出勤
       data[day] = {
         type: 'work',
 
@@ -146,9 +136,9 @@ export default function ShiftEditForm({
   const [error, setError] =
     useState('')
 
-  // =====================================
+  // =========================
   // 1日の内容更新
-  // =====================================
+  // =========================
   function updateDay(
     day: number,
     values: Partial<DayData>
@@ -167,152 +157,99 @@ export default function ShiftEditForm({
     }))
   }
 
-  // =====================================
-  // 保存
-  // =====================================
-  async function handleSave() {
-    if (locked) {
-      setError(
-        'この月のシフトは確定済みのため変更できません'
-      )
+  // =========================
+  // 入力チェック
+  // =========================
+  function validateShifts() {
+    for (
+      let day = 1;
+      day <= daysInMonth;
+      day++
+    ) {
+      const data = days[day]
 
-      return
+      if (
+        data.type === 'work' &&
+        !data.startTime
+      ) {
+        throw new Error(
+          `${day}日の出勤時間を入力してください`
+        )
+      }
+
+      if (
+        data.type === 'work' &&
+        data.endType === 'time' &&
+        !data.endTime
+      ) {
+        throw new Error(
+          `${day}日の退勤時間を入力してください`
+        )
+      }
     }
+  }
 
-    if (submitted) {
-      setError(
-        '提出済みです。修正する場合は先に提出を取り消してください'
-      )
-
-      return
-    }
-
-    setLoading(true)
-    setError('')
-    setMessage('')
+  // =========================
+  // DBへシフト保存
+  // =========================
+  async function saveShifts() {
+    validateShifts()
 
     const supabase =
       createClient()
 
-    try {
-      for (
-        let day = 1;
-        day <= daysInMonth;
-        day++
+    for (
+      let day = 1;
+      day <= daysInMonth;
+      day++
+    ) {
+      const data =
+        days[day]
+
+      const shiftDate =
+        `${year}-${String(month).padStart(2, '0')}-${String(
+          day
+        ).padStart(2, '0')}`
+
+      // =========================
+      // 未入力
+      // =========================
+      if (
+        data.type === 'none'
       ) {
-        const data =
-          days[day]
-
-        const shiftDate =
-          `${year}-${String(month).padStart(2, '0')}-${String(
-            day
-          ).padStart(2, '0')}`
-
-        // =================================
-        // 未入力
-        // 既存シフトがあれば削除
-        // =================================
-        if (
-          data.type === 'none'
-        ) {
-          const {
-            error: deleteError,
-          } = await supabase
-            .from('shifts')
-            .delete()
-            .eq(
-              'store_id',
-              storeId
-            )
-            .eq(
-              'user_id',
-              userId
-            )
-            .eq(
-              'shift_date',
-              shiftDate
-            )
-
-          if (deleteError) {
-            throw deleteError
-          }
-
-          continue
-        }
-
-        // =================================
-        // 休み
-        // =================================
-        if (
-          data.type === 'off'
-        ) {
-          const {
-            error: offError,
-          } = await supabase
-            .from('shifts')
-            .upsert(
-              {
-                store_id:
-                  storeId,
-
-                user_id:
-                  userId,
-
-                shift_date:
-                  shiftDate,
-
-                start_time:
-                  null,
-
-                end_time:
-                  null,
-
-                end_type:
-                  'time',
-
-                is_off:
-                  true,
-
-                note:
-                  data.note ||
-                  null,
-              },
-              {
-                onConflict:
-                  'store_id,user_id,shift_date',
-              }
-            )
-
-          if (offError) {
-            throw offError
-          }
-
-          continue
-        }
-
-        // =================================
-        // 出勤
-        // =================================
-        if (
-          !data.startTime
-        ) {
-          throw new Error(
-            `${day}日の出勤時間を入力してください`
-          )
-        }
-
-        if (
-          data.endType ===
-            'time' &&
-          !data.endTime
-        ) {
-          throw new Error(
-            `${day}日の退勤時間を入力してください`
-          )
-        }
-
         const {
-          error: workError,
+          error: deleteError,
+        } = await supabase
+          .from('shifts')
+          .delete()
+          .eq(
+            'store_id',
+            storeId
+          )
+          .eq(
+            'user_id',
+            userId
+          )
+          .eq(
+            'shift_date',
+            shiftDate
+          )
+
+        if (deleteError) {
+          throw deleteError
+        }
+
+        continue
+      }
+
+      // =========================
+      // 休み
+      // =========================
+      if (
+        data.type === 'off'
+      ) {
+        const {
+          error: offError,
         } = await supabase
           .from('shifts')
           .upsert(
@@ -327,19 +264,16 @@ export default function ShiftEditForm({
                 shiftDate,
 
               start_time:
-                data.startTime,
+                null,
 
               end_time:
-                data.endType ===
-                'last'
-                  ? null
-                  : data.endTime,
+                null,
 
               end_type:
-                data.endType,
+                'time',
 
               is_off:
-                false,
+                true,
 
               note:
                 data.note ||
@@ -351,10 +285,86 @@ export default function ShiftEditForm({
             }
           )
 
-        if (workError) {
-          throw workError
+        if (offError) {
+          throw offError
         }
+
+        continue
       }
+
+      // =========================
+      // 出勤
+      // =========================
+      const {
+        error: workError,
+      } = await supabase
+        .from('shifts')
+        .upsert(
+          {
+            store_id:
+              storeId,
+
+            user_id:
+              userId,
+
+            shift_date:
+              shiftDate,
+
+            start_time:
+              data.startTime,
+
+            end_time:
+              data.endType ===
+              'last'
+                ? null
+                : data.endTime,
+
+            end_type:
+              data.endType,
+
+            is_off:
+              false,
+
+            note:
+              data.note ||
+              null,
+          },
+          {
+            onConflict:
+              'store_id,user_id,shift_date',
+          }
+        )
+
+      if (workError) {
+        throw workError
+      }
+    }
+  }
+
+  // =========================
+  // 途中保存
+  // =========================
+  async function handleSave() {
+    if (locked) {
+      setError(
+        'この月のシフトは確定済みのため変更できません'
+      )
+      return
+    }
+
+    if (submitted) {
+      setError(
+        '提出済みです。修正する場合は先に提出を取り消してください'
+      )
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      await saveShifts()
 
       setMessage(
         'シフトを保存しました'
@@ -380,12 +390,176 @@ export default function ShiftEditForm({
     }
   }
 
+  // =========================
+  // 保存して提出
+  // =========================
+  async function handleSubmit() {
+    if (locked) {
+      setError(
+        'この月のシフトは確定済みのため提出できません'
+      )
+      return
+    }
+
+    if (submitted) {
+      return
+    }
+
+    if (
+      !window.confirm(
+        'この内容でシフトを提出しますか？'
+      )
+    ) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      // ① 最新入力内容を保存
+      await saveShifts()
+
+      // ② 提出状態に変更
+      const response =
+        await fetch(
+          '/api/shifts/submit',
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                storeId,
+                year,
+                month,
+                status:
+                  'submitted',
+              }),
+          }
+        )
+
+      const result =
+        await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+          '提出に失敗しました'
+        )
+      }
+
+      setMessage(
+        'シフトを提出しました'
+      )
+
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+
+      if (
+        err instanceof Error
+      ) {
+        setError(
+          err.message
+        )
+      } else {
+        setError(
+          '提出に失敗しました'
+        )
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // =========================
+  // 提出取り消し
+  // =========================
+  async function handleCancelSubmit() {
+    if (locked) {
+      setError(
+        'この月のシフトは確定済みのため変更できません'
+      )
+      return
+    }
+
+    if (
+      !window.confirm(
+        '提出を取り消しますか？'
+      )
+    ) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const response =
+        await fetch(
+          '/api/shifts/submit',
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+
+            body:
+              JSON.stringify({
+                storeId,
+                year,
+                month,
+                status:
+                  'draft',
+              }),
+          }
+        )
+
+      const result =
+        await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+          '提出の取り消しに失敗しました'
+        )
+      }
+
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+
+      if (
+        err instanceof Error
+      ) {
+        setError(
+          err.message
+        )
+      } else {
+        setError(
+          '提出の取り消しに失敗しました'
+        )
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="mt-6">
 
-      {/* =================================
-          店舗側で確定済み
-      ================================= */}
+      {/* =========================
+          店舗確定済み
+      ========================= */}
       {locked && (
         <div className="mb-6 rounded-xl bg-gray-100 p-4 text-sm text-gray-600">
           <p className="font-medium">
@@ -398,9 +572,9 @@ export default function ShiftEditForm({
         </div>
       )}
 
-      {/* =================================
+      {/* =========================
           本人提出済み
-      ================================= */}
+      ========================= */}
       {!locked &&
         submitted && (
           <div className="mb-6 rounded-xl bg-green-50 p-4 text-sm text-green-800">
@@ -409,14 +583,14 @@ export default function ShiftEditForm({
             </p>
 
             <p className="mt-1">
-              修正する場合は、下の「提出を取り消す」を押してから編集してください。
+              修正する場合は、下の「提出を取り消す」を押してください。
             </p>
           </div>
         )}
 
-      {/* =================================
+      {/* =========================
           日別入力
-      ================================= */}
+      ========================= */}
       <div className="space-y-3">
 
         {Array.from(
@@ -443,9 +617,7 @@ export default function ShiftEditForm({
               '木',
               '金',
               '土',
-            ][
-              date.getDay()
-            ]
+            ][date.getDay()]
 
           const data =
             days[day]
@@ -461,7 +633,6 @@ export default function ShiftEditForm({
             >
               <div className="flex flex-wrap items-center gap-3">
 
-                {/* 日付 */}
                 <div className="w-20 font-medium">
                   {day}日
 
@@ -470,7 +641,6 @@ export default function ShiftEditForm({
                   </span>
                 </div>
 
-                {/* 出勤種別 */}
                 <select
                   value={
                     data.type
@@ -478,15 +648,12 @@ export default function ShiftEditForm({
                   disabled={
                     formLocked
                   }
-                  onChange={(
-                    e
-                  ) =>
+                  onChange={(e) =>
                     updateDay(
                       day,
                       {
                         type:
-                          e
-                            .target
+                          e.target
                             .value as
                             | 'none'
                             | 'work'
@@ -509,7 +676,6 @@ export default function ShiftEditForm({
                   </option>
                 </select>
 
-                {/* 出勤時 */}
                 {data.type ===
                   'work' && (
                   <>
@@ -521,15 +687,12 @@ export default function ShiftEditForm({
                       value={
                         data.startTime
                       }
-                      onChange={(
-                        e
-                      ) =>
+                      onChange={(e) =>
                         updateDay(
                           day,
                           {
                             startTime:
-                              e
-                                .target
+                              e.target
                                 .value,
                           }
                         )
@@ -548,15 +711,12 @@ export default function ShiftEditForm({
                       value={
                         data.endType
                       }
-                      onChange={(
-                        e
-                      ) =>
+                      onChange={(e) =>
                         updateDay(
                           day,
                           {
                             endType:
-                              e
-                                .target
+                              e.target
                                 .value as
                                 | 'time'
                                 | 'last',
@@ -584,15 +744,12 @@ export default function ShiftEditForm({
                         value={
                           data.endTime
                         }
-                        onChange={(
-                          e
-                        ) =>
+                        onChange={(e) =>
                           updateDay(
                             day,
                             {
                               endTime:
-                                e
-                                  .target
+                                e.target
                                   .value,
                             }
                           )
@@ -602,10 +759,8 @@ export default function ShiftEditForm({
                     )}
                   </>
                 )}
-
               </div>
 
-              {/* 備考 */}
               {data.type !==
                 'none' && (
                 <input
@@ -616,15 +771,12 @@ export default function ShiftEditForm({
                   value={
                     data.note
                   }
-                  onChange={(
-                    e
-                  ) =>
+                  onChange={(e) =>
                     updateDay(
                       day,
                       {
                         note:
-                          e
-                            .target
+                          e.target
                             .value,
                       }
                     )
@@ -633,47 +785,86 @@ export default function ShiftEditForm({
                   className="mt-3 w-full rounded-lg border px-3 py-2 text-sm disabled:bg-gray-100"
                 />
               )}
-
             </div>
           )
         })}
       </div>
 
-      {/* =================================
+      {/* =========================
           エラー
-      ================================= */}
+      ========================= */}
       {error && (
         <div className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-600">
           {error}
         </div>
       )}
 
-      {/* =================================
-          保存成功
-      ================================= */}
+      {/* =========================
+          成功
+      ========================= */}
       {message && (
         <div className="mt-6 rounded-lg bg-green-50 p-4 text-sm text-green-700">
           {message}
         </div>
       )}
 
-      {/* =================================
-          保存ボタン
-      ================================= */}
-      {!formLocked && (
+      {/* =========================
+          ボタン
+      ========================= */}
+      {!locked && !submitted && (
+        <div className="mt-6 space-y-3">
+
+          <button
+            type="button"
+            onClick={
+              handleSave
+            }
+            disabled={
+              loading
+            }
+            className="w-full rounded-xl border border-gray-300 py-4 font-medium disabled:opacity-50"
+          >
+            {loading
+              ? '処理中...'
+              : '途中保存'}
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              handleSubmit
+            }
+            disabled={
+              loading
+            }
+            className="w-full rounded-xl bg-blue-600 py-4 font-medium text-white disabled:opacity-50"
+          >
+            {loading
+              ? '提出中...'
+              : 'シフトを提出'}
+          </button>
+
+          <p className="text-center text-xs text-gray-400">
+            提出すると、現在の入力内容も自動で保存されます
+          </p>
+
+        </div>
+      )}
+
+      {!locked && submitted && (
         <button
           type="button"
           onClick={
-            handleSave
+            handleCancelSubmit
           }
           disabled={
             loading
           }
-          className="mt-6 w-full rounded-xl bg-black py-4 font-medium text-white disabled:opacity-50"
+          className="mt-6 w-full rounded-xl border border-gray-300 py-4 font-medium disabled:opacity-50"
         >
           {loading
-            ? '保存中...'
-            : 'シフトを保存'}
+            ? '処理中...'
+            : '提出を取り消す'}
         </button>
       )}
 

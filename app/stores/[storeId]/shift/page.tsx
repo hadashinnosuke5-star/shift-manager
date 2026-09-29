@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import ShiftEditForm from './ShiftEditForm'
-import ShiftSubmitButton from '@/components/ShiftSubmitButton'
 import MonthSelector from '@/components/MonthSelector'
 
 export const dynamic = 'force-dynamic'
@@ -336,18 +335,6 @@ export default async function ShiftEditPage({
               submissionStatus === 'submitted'
             }
           />
-
-          {/* 提出ボタン */}
-          <div className="mt-4">
-            <ShiftSubmitButton
-              storeId={storeId}
-              year={year}
-              month={month}
-              currentStatus={submissionStatus}
-              locked={locked}
-            />
-          </div>
-
         </div>
       </div>
     </main>

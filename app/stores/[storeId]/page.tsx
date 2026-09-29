@@ -329,6 +329,34 @@ export default async function StorePage({
     return `${start}-${end}`
   }
 
+  function getDisplayShiftText(
+  userId: string,
+  day: number
+) {
+  const shiftText =
+    getShiftText(
+      userId,
+      day
+    )
+
+  // シフト入力がある場合
+  if (shiftText) {
+    return shiftText
+  }
+
+  // 未入力でも提出済みなら休み
+  if (
+    getSubmissionStatus(
+      userId
+    ) === 'submitted'
+  ) {
+    return '休'
+  }
+
+  // 未提出＋未入力
+  return ''
+}
+
   // =====================================
   // 集計
   // =====================================
@@ -656,7 +684,7 @@ export default async function StorePage({
                         }
 
                         const shiftText =
-                          getShiftText(
+                          getDisplayShiftText(
                             membership.user_id,
                             day
                           )
@@ -839,7 +867,7 @@ export default async function StorePage({
                             key={day}
                             className="border px-2 py-3 text-center"
                           >
-                            {getShiftText(
+                            {getDisplayShiftText(
                               membership.user_id,
                               day
                             )}
