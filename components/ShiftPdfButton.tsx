@@ -8,6 +8,7 @@ type StaffData = {
   name: string
   role: string
   shifts: Record<number, string>
+  submitted: boolean
 }
 
 type Props = {
@@ -25,8 +26,7 @@ export default function ShiftPdfButton({
   daysInMonth,
   staffData,
 }: Props) {
-  const [loading, setLoading] =
-    useState(false)
+  const [loading, setLoading] = useState(false)
 
   function getWeek(day: number) {
     const date = new Date(
@@ -46,9 +46,6 @@ export default function ShiftPdfButton({
     ][date.getDay()]
   }
 
-  // =========================
-  // 1つのシフト表を作成
-  // =========================
   function createShiftTable(
     startDay: number,
     endDay: number
@@ -56,107 +53,70 @@ export default function ShiftPdfButton({
     const wrapper =
       document.createElement('div')
 
-    wrapper.style.marginBottom =
-      '24px'
+    wrapper.style.marginBottom = '22px'
 
-    // -------------------------
+    // =========================
     // 期間タイトル
-    // -------------------------
+    // =========================
     const sectionTitle =
       document.createElement('div')
 
-    sectionTitle.style.fontSize =
-      '16px'
-
-    sectionTitle.style.fontWeight =
-      'bold'
-
-    sectionTitle.style.marginBottom =
-      '6px'
+    sectionTitle.style.fontSize = '16px'
+    sectionTitle.style.fontWeight = 'bold'
+    sectionTitle.style.marginBottom = '6px'
 
     sectionTitle.textContent =
       `${startDay}日〜${endDay}日`
 
-    wrapper.appendChild(
-      sectionTitle
-    )
+    wrapper.appendChild(sectionTitle)
 
-    // -------------------------
+    // =========================
     // テーブル
-    // -------------------------
+    // =========================
     const table =
-      document.createElement(
-        'table'
-      )
+      document.createElement('table')
 
-    table.style.borderCollapse =
-      'collapse'
-
+    table.style.borderCollapse = 'collapse'
     table.style.width = '100%'
-
-    table.style.tableLayout =
-      'fixed'
-
-    table.style.fontSize =
-      '12px'
+    table.style.tableLayout = 'fixed'
+    table.style.fontSize = '12px'
 
     // =========================
     // ヘッダー
     // =========================
     const thead =
-      document.createElement(
-        'thead'
-      )
+      document.createElement('thead')
 
     const headerRow =
-      document.createElement(
-        'tr'
-      )
+      document.createElement('tr')
 
-    // スタッフ列
     const staffHeader =
-      document.createElement(
-        'th'
-      )
+      document.createElement('th')
 
-    staffHeader.textContent =
-      'スタッフ'
-
+    staffHeader.textContent = 'スタッフ'
     staffHeader.style.border =
       '1px solid #999'
-
-    staffHeader.style.padding =
-      '6px'
-
-    staffHeader.style.width =
-      '120px'
-
+    staffHeader.style.padding = '6px'
+    staffHeader.style.width = '125px'
     staffHeader.style.background =
       '#eeeeee'
-
     staffHeader.style.textAlign =
       'center'
 
-    headerRow.appendChild(
-      staffHeader
-    )
+    headerRow.appendChild(staffHeader)
 
-    // 日付
     for (
       let day = startDay;
       day <= endDay;
       day++
     ) {
       const th =
-        document.createElement(
-          'th'
-        )
+        document.createElement('th')
 
       th.style.border =
         '1px solid #999'
 
-      th.style.padding =
-        '5px 2px'
+      th.style.padding = '5px 2px'
 
       th.style.background =
         '#eeeeee'
@@ -164,139 +124,117 @@ export default function ShiftPdfButton({
       th.style.textAlign =
         'center'
 
-      th.style.fontSize =
-        '12px'
-
       th.innerHTML =
         `${day}<br>` +
-        `<span style="
-          font-size:9px;
-          font-weight:normal;
-        ">${getWeek(day)}</span>`
+        `<span style="font-size:9px;font-weight:normal;">` +
+        `${getWeek(day)}` +
+        `</span>`
 
       headerRow.appendChild(th)
     }
 
-    thead.appendChild(
-      headerRow
-    )
-
+    thead.appendChild(headerRow)
     table.appendChild(thead)
 
     // =========================
     // 本体
     // =========================
     const tbody =
-      document.createElement(
-        'tbody'
-      )
+      document.createElement('tbody')
 
-    staffData.forEach(
-      (staff) => {
-        const row =
-          document.createElement(
-            'tr'
-          )
+    staffData.forEach((staff) => {
+      const row =
+        document.createElement('tr')
 
-        // -----------------------
-        // スタッフ名
-        // -----------------------
-        const nameCell =
-          document.createElement(
-            'td'
-          )
+      // =========================
+      // スタッフ名
+      // =========================
+      const nameCell =
+        document.createElement('td')
 
-        nameCell.style.border =
+      nameCell.style.border =
+        '1px solid #999'
+
+      nameCell.style.padding = '6px'
+
+      nameCell.style.width = '125px'
+
+      nameCell.style.wordBreak =
+        'break-word'
+
+      nameCell.innerHTML =
+        `<strong>${staff.name}</strong>` +
+        `<br>` +
+        `<span style="font-size:9px;">` +
+        `${staff.role}` +
+        `</span>`
+
+      row.appendChild(nameCell)
+
+      // =========================
+      // 各日のシフト
+      // =========================
+      for (
+        let day = startDay;
+        day <= endDay;
+        day++
+      ) {
+        const cell =
+          document.createElement('td')
+
+        cell.style.border =
           '1px solid #999'
 
-        nameCell.style.padding =
-          '6px'
+        cell.style.padding =
+          '6px 2px'
 
-        nameCell.style.width =
-          '120px'
+        cell.style.textAlign =
+          'center'
 
-        nameCell.style.overflow =
-          'hidden'
+        cell.style.verticalAlign =
+          'middle'
 
-        nameCell.style.wordBreak =
+        cell.style.fontSize =
+          '11px'
+
+        cell.style.lineHeight =
+          '1.25'
+
+        cell.style.whiteSpace =
+          'normal'
+
+        cell.style.wordBreak =
           'break-word'
 
-        nameCell.innerHTML =
-          `<strong style="
-            font-size:12px;
-          ">${staff.name}</strong>` +
-          `<br>` +
-          `<span style="
-            font-size:9px;
-          ">${staff.role}</span>`
+        // =========================
+        // シフト表示
+        // =========================
+        const shift =
+          staff.shifts[day]
 
-        row.appendChild(
-          nameCell
-        )
-
-        // -----------------------
-        // シフト
-        // -----------------------
-        for (
-          let day = startDay;
-          day <= endDay;
-          day++
+        if (
+          shift &&
+          shift.trim() !== ''
         ) {
-          const cell =
-            document.createElement(
-              'td'
-            )
-
-          cell.style.border =
-            '1px solid #999'
-
-          cell.style.padding =
-            '5px 2px'
-
-          cell.style.textAlign =
-            'center'
-
-          cell.style.verticalAlign =
-            'middle'
-
-          cell.style.fontSize =
-            '11px'
-
-          cell.style.lineHeight =
-            '1.25'
-
-          cell.style.wordBreak =
-            'break-word'
-
-          cell.style.overflowWrap =
-            'anywhere'
-
-          // nowrapを使わない
-          // 長い勤務時間はセル内で改行可能
-          cell.style.whiteSpace =
-            'normal'
-
-          const shift =
-            staff.shifts[day] || ''
-
-          // 「19:00〜22:00」などを
-          // 必要に応じて改行しやすくする
-          cell.textContent =
-            shift
-
-          row.appendChild(
-            cell
-          )
+          // 入力済み
+          cell.textContent = shift
+        } else if (
+          staff.submitted
+        ) {
+          // 提出済み＋未入力
+          cell.textContent = '休'
+        } else {
+          // 未提出＋未入力
+          cell.textContent = ''
         }
 
-        tbody.appendChild(
-          row
-        )
+        row.appendChild(cell)
       }
-    )
+
+      tbody.appendChild(row)
+    })
 
     table.appendChild(tbody)
-
     wrapper.appendChild(table)
 
     return wrapper
@@ -314,9 +252,7 @@ export default function ShiftPdfButton({
       // PDF用HTML
       // =========================
       container =
-        document.createElement(
-          'div'
-        )
+        document.createElement('div')
 
       container.style.position =
         'fixed'
@@ -332,8 +268,6 @@ export default function ShiftPdfButton({
       container.style.padding =
         '24px'
 
-      // 15日区切りなので
-      // 横幅を小さくできる
       container.style.width =
         '1400px'
 
@@ -347,46 +281,30 @@ export default function ShiftPdfButton({
       // タイトル
       // =========================
       const title =
-        document.createElement(
-          'div'
-        )
+        document.createElement('div')
 
-      title.style.fontSize =
-        '26px'
-
-      title.style.fontWeight =
-        'bold'
-
-      title.style.marginBottom =
-        '5px'
+      title.style.fontSize = '26px'
+      title.style.fontWeight = 'bold'
+      title.style.marginBottom = '5px'
 
       title.textContent =
         `${storeName} シフト表`
 
-      container.appendChild(
-        title
-      )
+      container.appendChild(title)
 
       const subtitle =
-        document.createElement(
-          'div'
-        )
+        document.createElement('div')
 
-      subtitle.style.fontSize =
-        '18px'
-
+      subtitle.style.fontSize = '18px'
       subtitle.style.marginBottom =
         '18px'
 
       subtitle.textContent =
         `${year}年${month}月`
 
-      container.appendChild(
-        subtitle
-      )
+      container.appendChild(subtitle)
 
       // =========================
-      // 上段
       // 1日〜15日
       // =========================
       container.appendChild(
@@ -400,7 +318,6 @@ export default function ShiftPdfButton({
       )
 
       // =========================
-      // 下段
       // 16日〜月末
       // =========================
       if (daysInMonth >= 16) {
@@ -437,12 +354,10 @@ export default function ShiftPdfButton({
         )
 
       // =========================
-      // PDF
-      // A4横
+      // PDF作成
       // =========================
       const pdf = new jsPDF({
-        orientation:
-          'landscape',
+        orientation: 'landscape',
         unit: 'mm',
         format: 'a4',
       })
@@ -456,12 +371,10 @@ export default function ShiftPdfButton({
       const margin = 6
 
       const availableWidth =
-        pdfWidth -
-        margin * 2
+        pdfWidth - margin * 2
 
       const availableHeight =
-        pdfHeight -
-        margin * 2
+        pdfHeight - margin * 2
 
       const imageWidth =
         canvas.width
@@ -469,7 +382,6 @@ export default function ShiftPdfButton({
       const imageHeight =
         canvas.height
 
-      // A4内に収める
       const scale =
         Math.min(
           availableWidth /
@@ -511,16 +423,13 @@ export default function ShiftPdfButton({
       pdf.save(
         `${storeName}_${year}年${month}月_シフト.pdf`
       )
-
     } catch (error) {
       console.error(error)
 
       alert(
         'PDFの作成に失敗しました'
       )
-
     } finally {
-      // エラー時もHTMLを削除
       if (
         container &&
         document.body.contains(

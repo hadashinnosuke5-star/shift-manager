@@ -389,6 +389,11 @@ export default async function StorePage({
               : 'スタッフ',
 
           shifts: staffShifts,
+
+          submitted:
+            getSubmissionStatus(
+              membership.user_id
+            ) === 'submitted',
         }
       })
       .filter(
@@ -398,6 +403,7 @@ export default async function StorePage({
           name: string
           role: string
           shifts: Record<number, string>
+          submitted: boolean
         } => item !== null
       )
 
