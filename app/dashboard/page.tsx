@@ -124,6 +124,29 @@ export default async function DashboardPage() {
             </div>
           </div>
 
+          {/* super_admin 専用 */}
+          <div className="mt-6 rounded-2xl bg-white p-6 shadow">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-bold">
+                  すごろく管理
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Pillow版・Recovery版のゲーム設定とマス内容を管理します。
+                </p>
+              </div>
+
+              <Link
+                href="/sugoroku"
+                prefetch={false}
+                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-black px-6 py-3 font-bold text-white transition hover:bg-gray-800"
+              >
+                🎲 すごろく管理
+              </Link>
+            </div>
+          </div>
+
         </div>
       </main>
     )
